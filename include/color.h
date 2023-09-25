@@ -23,16 +23,17 @@ inline double linear_to_gamma(double linear_component) {
  * @param out 输出目标流
  * @param samples_per_pixel
  */
-void write_color(float* fb, int nx, int ny, std::ostream& out,
+void write_color(vec3* fb, int nx, int ny, std::ostream& out,
                  int samples_per_pixel) {
   out << "P3\n" << nx << " " << ny << "\n255\n";
-  for (int j = ny - 1; j >= 0; j--) {
+  for (int j = 0; j < ny; j++) {
     for (int i = 0; i < nx; i++) {
-      size_t pixel_index = j * 3 * nx + i * 3;
-      float r = fb[pixel_index + 0];
-      float g = fb[pixel_index + 1];
-      float b = fb[pixel_index + 2];
-
+      // size_t pixel_index = j * 3 * nx + i * 3;
+      size_t pixel_index = j * nx + i;
+      vec3 pixel_color = fb[pixel_index];
+      float r = pixel_color.x();
+      float g = pixel_color.y();
+      float b = pixel_color.z();
       auto scale = 1.0 / samples_per_pixel;
       r *= scale;
       g *= scale;

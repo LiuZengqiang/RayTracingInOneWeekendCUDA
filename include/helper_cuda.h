@@ -14,5 +14,17 @@ void check_cuda(cudaError_t result, char const *const func,
     exit(EXIT_FAILURE);
   }
 }
-
+/**
+ * @brief Get the Thread Id object
+ *
+ * @return int
+ */
+__device__ inline int getThreadId() {
+  int block_id = blockIdx.z * (gridDim.x * gridDim.y) +
+                 blockIdx.y * (gridDim.x) + blockIdx.x;
+  int thread_id = threadIdx.z * (blockDim.x * blockDim.y) +
+                  threadIdx.y * (blockDim.x) + threadIdx.x +
+                  block_id * (blockDim.x * blockDim.y * blockDim.z);
+  return thread_id;
+}
 #endif

@@ -1,12 +1,43 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 #include "color.h"
+#include "cuda_runtime.h"
 #include "helper_cuda.h"
 #include "hittable.h"
 #include "hittable_list.h"
 #include "material.h"
 #include "rtweekend.h"
 
+// 根据光线r的y分量计算得到一个颜色
+__device__ vec3 ray_color(const ray& r, hittable_list** world) {
+  hit_record rec;
+
+  if ((*world)->hit(r, interval(0, infinity), rec)) {
+    return (rec.normal + vec3(1, 1, 1)) / 2.0f;
+  } else {
+    vec3 unit_direction = unit_vector(r.direction());
+    float t = 0.5f * (unit_direction.y() + 1.0f);
+    return (1.0f - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+  }
+}
+
+// 尝试使用 GPU端 的 ray_color
+// A __global__ function or function template cannot be a member function
+// 因此只能将 render<<<>>> 函数提出来
+__global__ void render(vec3* fb, hittable_list** world, int image_width,
+                       int image_height, vec3 origin, vec3 lower_left_corner,
+                       vec3 horizontal, vec3 vertical, int max_thread) {
+  int id = getThreadId();
+  if (id >= max_thread) return;
+
+  // 计算 pixel 的 index
+  int pixel_index = id;
+  int u = pixel_index % image_width;
+  int v = pixel_index / image_width;
+  vec3 lo = (lower_left_corner + u * horizontal + v * vertical);
+  ray r(origin, lo - origin);
+  fb[pixel_index] = ray_color(r, world);
+}
 // 相机类
 class camera {
  public:
@@ -27,29 +58,50 @@ class camera {
   double focus_dist = 10;  // 理想的焦距
   /* Public Camera Parameters Here */
 
-  void render(const hittable_list& world) {
-    // 先初始化相机的各个参数
+  // void render(const hittable_list& world) {
+  //   // 先初始化相机的各个参数
+  //   initialize();
+  // Render
+  // 渲染图像
+  // for (int j = 0; j < image_height; ++j) {
+  //   std::clog << "\rScanlines remaining: " << (image_height - j) << ' '
+  //             << std::flush;
+  //   for (int i = 0; i < image_width; ++i) {
+  //     color pixel_color;
+  //     for (int sample = 0; sample < samples_per_pixel; sample++) {
+  //       // 采样得到一条 视点->图像(i,j)像素的光线，在像素(i,j)中随机采样
+  //       auto r = get_ray(i, j);
+  //       // 在这里实现一个 计算光线 r 颜色的光线跟踪程序
+  //       pixel_color += ray_color(r, max_depth, world);
+
+  //     }
+  //   }
+  // }
+
+  // 输出渲染结果
+  //   write_color(fb, image_width, image_height, std::cout, samples_per_pixel);
+
+  //   std::clog << "\rDone.                 \n";
+  // }
+
+  __host__ void renderEntrance(hittable_list** world) {
     initialize();
-    // Render
-    // 渲染图像
-    for (int j = 0; j < image_height; ++j) {
-      std::clog << "\rScanlines remaining: " << (image_height - j) << ' '
-                << std::flush;
-      for (int i = 0; i < image_width; ++i) {
-        color pixel_color;
-        for (int sample = 0; sample < samples_per_pixel; sample++) {
-          // 采样得到一条 视点->图像(i,j)像素的光线，在像素(i,j)中随机采样
-          auto r = get_ray(i, j);
-          // 在这里实现一个 计算光线 r 颜色的光线跟踪程序
-          pixel_color += ray_color(r, max_depth, world);
-        }
-      }
-    }
+    int tx = 8;
+    int ty = 8;
+    int nx = image_width;
+    int ny = image_height;
 
+    dim3 grid_size(nx / tx + 1, ny / ty + 1);
+    dim3 block_size(tx, ty);
+
+    render<<<grid_size, block_size>>>(fb, world, nx, ny, center, pixel00_loc,
+                                      pixel_delta_u, pixel_delta_v,
+                                      image_width * image_height);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
     // 输出渲染结果
+    samples_per_pixel = 1;
     write_color(fb, image_width, image_height, std::cout, samples_per_pixel);
-
-    std::clog << "\rDone.                 \n";
   }
 
   ~camera() {
@@ -75,7 +127,7 @@ class camera {
   /* CUDA */
   // 图像内存大小, framebuffer size
   size_t fb_size = 0;
-  float* fb = nullptr;
+  vec3* fb = nullptr;
 
   /* Private Camera Variables Here */
   void initialize() {
@@ -140,38 +192,38 @@ class camera {
     defocus_disk_v = defocus_radius * v;
     // CUDA 相关
     int num_pixels = image_width * image_height;
-    fb_size = 3 * num_pixels * sizeof(float);
+    fb_size = num_pixels * sizeof(vec3);
     checkCudaErrors(cudaMallocManaged((void**)&fb, fb_size));
   }
 
   // 计算 光线 r 在场景 world 中的颜色
-  color ray_color(const ray& r, int depth, const hittable_list& world) {
-    if (depth <= 0) {
-      return color(0, 0, 0);
-    }
-    hit_record rec;
-    // 如果集中物体，就反射物体的颜色*0.5
-    // 忽略[0,0.001) 范围内的交点，以避免浮点运算的误差
-    if (world.hit(r, interval(0.001, infinity), rec)) {
-      // 计算反射结果
-      // 反射光线
-      ray scattered;
-      // 光线的散射
-      color attenuation;
-      // 入射光, 交点, 衰减, 散射
-      if (rec.mat->scatter(r, rec, attenuation, scattered)) {
-        return attenuation * ray_color(scattered, depth - 1, world);
-      } else {
-        // 有一定可能 反射光 与 交点法向 反向，此时
-        // rec.mat->scatter()函数返回false
-        return color(0, 0, 0);
-      }
-    }
-    // 如果没有击中物体，就假设击中天空，天空的颜色是一个无意义的随机值
-    vec3 unit_direction = unit_vector(r.direction());
-    auto a = 0.5 * (unit_direction.y() + 1.0);
-    return (1.0 - a) * color(1.0, 1.0, 1.0) + a * color(0.5, 0.7, 1.0);
-  }
+  // color ray_color(const ray& r, int depth, const hittable_list& world) {
+  //   if (depth <= 0) {
+  //     return color(0, 0, 0);
+  //   }
+  //   hit_record rec;
+  //   // 如果集中物体，就反射物体的颜色*0.5
+  //   // 忽略[0,0.001) 范围内的交点，以避免浮点运算的误差
+  //   if (world.hit(r, interval(0.001, infinity), rec)) {
+  //     // 计算反射结果
+  //     // 反射光线
+  //     ray scattered;
+  //     // 光线的散射
+  //     color attenuation;
+  //     // 入射光, 交点, 衰减, 散射
+  //     if (rec.mat->scatter(r, rec, attenuation, scattered)) {
+  //       return attenuation * ray_color(scattered, depth - 1, world);
+  //     } else {
+  //       // 有一定可能 反射光 与 交点法向 反向，此时
+  //       // rec.mat->scatter()函数返回false
+  //       return color(0, 0, 0);
+  //     }
+  //   }
+  //   // 如果没有击中物体，就假设击中天空，天空的颜色是一个无意义的随机值
+  //   vec3 unit_direction = unit_vector(r.direction());
+  //   auto a = 0.5 * (unit_direction.y() + 1.0);
+  //   return (1.0 - a) * color(1.0, 1.0, 1.0) + a * color(0.5, 0.7, 1.0);
+  // }
 
   // 采样 视点->像素 (i,j) 的一条光线
   ray get_ray(int i, int j) const {

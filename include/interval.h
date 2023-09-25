@@ -3,17 +3,17 @@
 
 class interval {
  public:
-  double min, max;
+  float min, max;
 
   __host__ __device__ interval() : min(+infinity), max(-infinity) {}  // Default interval is empty
 
-  __host__ __device__ interval(double _min, double _max) : min(_min), max(_max) {}
+  __host__ __device__ interval(float _min, float _max) : min(_min), max(_max) {}
   // 判断 x 是否在目标范围内部(包含边界)
-  __host__ __device__ bool contains(double x) const { return min <= x && x <= max; }
+  __host__ __device__ bool contains(float x) const { return min <= x && x <= max; }
   // 判断 x 是否在目标范围内部(不包含边界)
-  __host__ __device__ bool surrounds(double x) const { return min < x && x < max; }
+  __host__ __device__ bool surrounds(float x) const { return min < x && x < max; }
   // 将 x clamp 到目标范围内部
-  __host__ __device__ double clamp(double x) const {
+  __host__ __device__ float clamp(float x) const {
     if (x < min) return min;
     if (x > max) return max;
     return x;

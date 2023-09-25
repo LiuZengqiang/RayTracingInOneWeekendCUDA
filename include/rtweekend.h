@@ -17,23 +17,21 @@ using std::sqrt;
 
 // Constants
 // 常用的常数
-const double infinity = std::numeric_limits<double>::infinity();
-const double pi = 3.1415926535897932385;
+const float infinity = std::numeric_limits<float>::infinity();
+const float pi = 3.1415926535897932385f;
 
 // Utility Functions
 // 常用的函数
 // 角度转弧度
-inline double degrees_to_radians(double degrees) {
-  return degrees * pi / 180.0;
-}
+inline float degrees_to_radians(float degrees) { return degrees * pi / 180.0f; }
 // 生成 [0,1) 随机数的函数
-inline double random_double() {
-  static std::uniform_real_distribution<double> distribution(0.0, 1.0);
+inline float random_double() {
+  static std::uniform_real_distribution<float> distribution(0.0, 1.0);
   static std::mt19937 generator;
   return distribution(generator);
 }
 // 生成 [min, max) 范围内随机数的函数
-inline double random_double(double min, double max) {
+inline float random_double(float min, float max) {
   // Returns a random real in [min,max).
   return min + (max - min) * random_double();
 }

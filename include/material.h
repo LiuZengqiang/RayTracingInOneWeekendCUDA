@@ -19,6 +19,7 @@ class material {
 };
 
 // 新建 Lambertian 材料属性
+// 单颜色属性
 class lambertian : public material {
  public:
   __host__ __device__ lambertian(const color& a) : albedo(a) {}
@@ -27,12 +28,12 @@ class lambertian : public material {
                                    color& attenuation,
                                    ray& scattered) const override {
     // 这里有可能 等于零向量，因此需要进行判断
-    vec3 scatter_direction = rec.normal + random_unit_vector();
-    if (scatter_direction.near_zero()) {
-      scatter_direction = rec.normal;
-    }
+    // vec3 scatter_direction = rec.normal + random_unit_vector();
+    // if (scatter_direction.near_zero()) {
+    //   scatter_direction = rec.normal;
+    // }
 
-    scattered = ray(rec.p, scatter_direction);
+    // scattered = ray(rec.p, scatter_direction);
     attenuation = albedo;
     return true;
   }
