@@ -1,4 +1,3 @@
-// sphere类 该类继承 hittable
 #ifndef SPHERE_H
 #define SPHERE_H
 

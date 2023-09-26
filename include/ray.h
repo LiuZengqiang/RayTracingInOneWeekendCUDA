@@ -1,4 +1,3 @@
-// TODO:: 在GPU端double精度可能会很耗时, 需要转为float单精度
 #ifndef RAY_H
 #define RAY_H
 

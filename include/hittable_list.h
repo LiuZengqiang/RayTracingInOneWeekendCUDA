@@ -1,6 +1,3 @@
-// 多个hittable的封装类
-// 使用到了 智能指针 等特性
-// 在 CUDA 中不能使用智能指针或者STL容器, 只能使用 朴素的指针
 #ifndef HITTABLE_LIST_H
 #define HITTABLE_LIST_H
 
@@ -16,7 +13,7 @@ struct hittable_node {
 
 class hittable_list : public hittable {
  public:
-  // 物体列表
+  // 物体列表(链表)
   hittable_node* d_first_object_node = nullptr;
   hittable_node* d_last_object_node = nullptr;
 

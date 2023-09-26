@@ -1,4 +1,3 @@
-// 材料属性 类
 #ifndef MATERIAL_H
 #define MATERIAL_H
 #include "color.h"
@@ -6,7 +5,6 @@
 #include "rtweekend.h"
 
 class hit_record;
-// 这里只是声明，没有实现
 class material {
  public:
   virtual ~material() = default;

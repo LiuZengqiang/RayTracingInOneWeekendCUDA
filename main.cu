@@ -64,16 +64,6 @@ __global__ void create_world(hittable_list** world, curandState* rand_state) {
 
   metal* material3 = new metal(color(0.7, 0.6, 0.5), 0.0f);
   (*world)->add(new sphere(point3(4, 1, 0), 1.0, material3));
-
-  // lambertian* material_ground = new lambertian(color(0.8, 0.8, 0.0));
-  // lambertian* material_center = new lambertian(color(0.7, 0.3, 0.3));
-  // metal* material_left = new metal(color(0.8, 0.8, 0.8), 0.3);
-  // metal* material_right = new metal(color(0.8, 0.6, 0.2), 1.0);
-
-  // (*world)->add(new sphere(point3(0, -100.5, -1), 100, material_ground));
-  // (*world)->add(new sphere(point3(0.0, 0.0, -1.0), 0.5, material_center));
-  // (*world)->add(new sphere(point3(-1.0, 0.0, -1.0), 0.5, material_left));
-  // (*world)->add(new sphere(point3(1.0, 0.0, -1.0), 0.5, material_right));
 }
 
 __global__ void free_world(hittable_list** world) {
@@ -91,24 +81,11 @@ int main() {
   create_world<<<1, 1>>>(d_world, d_rand_state);
   checkCudaErrors(cudaDeviceSynchronize());
 
-  // camera cam;
-  // cam.aspect_ratio = 16.0 / 9.0;
-  // cam.image_width = 400;
-  // cam.samples_per_pixel = 5;
-  // cam.max_depth = 40;
-
-  // cam.vfov = 90;
-  // cam.lookfrom = point3(0, 0, 0);
-  // cam.lookat = point3(0, 0, -1);
-  // cam.vup = vec3(0, 1, 0);
-
-  // cam.defocus_angle = 0.6;
-  // cam.focus_dist = 1.0;
   /* 设置相机和输出图像的属性 */
   camera cam;
   cam.aspect_ratio = 16.0 / 9.0;  // 图像的长宽比
   cam.image_width = 800;          // 图像的宽(像素数)
-  cam.samples_per_pixel = 100;      // 每个像素的采样光线数
+  cam.samples_per_pixel = 100;    // 每个像素的采样光线数
   cam.max_depth = 50;             // 光线的最大深度
 
   cam.vfov = 20;                    // 视场角

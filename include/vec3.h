@@ -1,5 +1,3 @@
-// TODO:: __host__ __device__ 需要整理下, 最后的有些随机变量函数不能使用
-// __device__
 #ifndef VEC3_H
 #define VEC3_H
 #include <cuda_runtime.h>
