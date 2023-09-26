@@ -24,16 +24,16 @@ const float pi = 3.1415926535897932385f;
 // 常用的函数
 // 角度转弧度
 inline float degrees_to_radians(float degrees) { return degrees * pi / 180.0f; }
+
 // 生成 [0,1) 随机数的函数
-inline float random_double() {
-  static std::uniform_real_distribution<float> distribution(0.0, 1.0);
-  static std::mt19937 generator;
-  return distribution(generator);
+__device__ inline float random_double(curandState* state) {
+  return curand_uniform(state);
 }
 // 生成 [min, max) 范围内随机数的函数
-inline float random_double(float min, float max) {
+__device__ inline float random_double(float min, float max,
+                                      curandState* state) {
   // Returns a random real in [min,max).
-  return min + (max - min) * random_double();
+  return min + (max - min) * curand_uniform(state);
 }
 
 // Common Headers

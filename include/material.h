@@ -12,10 +12,9 @@ class material {
   virtual ~material() = default;
   // 描述该属性的材料 散射光线 的行为
   // 指定：入射光线 r_in, 交点 rec, 衰减 attenuation, 反射光线 scattered
-  __host__ __device__ virtual bool scatter(const ray& r_in,
-                                           const hit_record& rec,
-                                           color& attenuation,
-                                           ray& scattered) const = 0;
+  __device__ virtual bool scatter(const ray& r_in, const hit_record& rec,
+                                  color& attenuation, ray& scattered,
+                                  curandState* rand_state) const = 0;
 };
 
 // 新建 Lambertian 材料属性
@@ -24,16 +23,16 @@ class lambertian : public material {
  public:
   __host__ __device__ lambertian(const color& a) : albedo(a) {}
   // lambertian 会在表面法向周围的半球内 散射，并且存在一定的衰减attenuation
-  __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec,
-                                   color& attenuation,
-                                   ray& scattered) const override {
+  __device__ bool scatter(const ray& r_in, const hit_record& rec,
+                          color& attenuation, ray& scattered,
+                          curandState* rand_state) const override {
     // 这里有可能 等于零向量，因此需要进行判断
-    // vec3 scatter_direction = rec.normal + random_unit_vector();
-    // if (scatter_direction.near_zero()) {
-    //   scatter_direction = rec.normal;
-    // }
+    vec3 scatter_direction = rec.normal + random_unit_vector(rand_state);
+    if (scatter_direction.near_zero()) {
+      scatter_direction = rec.normal;
+    }
 
-    // scattered = ray(rec.p, scatter_direction);
+    scattered = ray(rec.p, scatter_direction);
     attenuation = albedo;
     return true;
   }

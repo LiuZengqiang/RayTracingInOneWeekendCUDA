@@ -1,5 +1,6 @@
 #ifndef CAMERA_H
 #define CAMERA_H
+#include "curand_kernel.h"
 #include "color.h"
 #include "cuda_runtime.h"
 #include "helper_cuda.h"
@@ -9,11 +10,19 @@
 #include "rtweekend.h"
 
 // 根据光线r的y分量计算得到一个颜色
-__device__ vec3 ray_color(const ray& r, hittable_list** world) {
+__device__ vec3 ray_color(const ray& r, hittable_list** world,
+                          curandState* rand_state) {
   hit_record rec;
 
   if ((*world)->hit(r, interval(0, infinity), rec)) {
-    return (rec.normal + vec3(1, 1, 1)) / 2.0f;
+    ray scattered;
+    color attenuation;
+    if (rec.mat->scatter(r, rec, attenuation, scattered, rand_state)) {
+      return attenuation;
+    } else {
+      return color(0, 0, 0);
+    }
+
   } else {
     vec3 unit_direction = unit_vector(r.direction());
     float t = 0.5f * (unit_direction.y() + 1.0f);
@@ -21,23 +30,86 @@ __device__ vec3 ray_color(const ray& r, hittable_list** world) {
   }
 }
 
+// 在一个 disk 中采样一个点
+__device__ point3 defocus_disk_sample(const vec3& center,
+                                      const vec3& defocus_disk_u,
+                                      const vec3& defocus_disk_v,
+                                      curandState* state) {
+  auto p = random_in_unit_disk(state);
+  return center + (p[0] * defocus_disk_u) + (p[1] * defocus_disk_v);
+}
+
+/**
+ * @brief GPU 在单位正方形内随机采样
+ *
+ * @return vec3
+ */
+__device__ vec3 pixel_sample_square(curandState* rand_state,
+                                    const vec3& pixel_delta_u,
+                                    const vec3& pixel_delta_v) {
+  auto px = -0.5 + curand_uniform(rand_state);
+  auto py = -0.5 + curand_uniform(rand_state);
+
+  return px * pixel_delta_u + py * pixel_delta_v;
+}
+
+__device__ ray get_ray(int i, int j, curandState* rand_state,
+                       const vec3& center, const vec3& pixel00_loc,
+                       const float& defocus_angle, const vec3& pixel_delta_u,
+                       const vec3& pixel_delta_v, const vec3 defocus_disk_u,
+                       const vec3 defocus_disk_v) {
+  auto pixel_center = pixel00_loc + i * pixel_delta_u + j * pixel_delta_v;
+  auto pixel_sample =
+      pixel_center +
+      pixel_sample_square(rand_state, pixel_delta_u, pixel_delta_v);
+
+  auto ray_origin = (defocus_angle <= 0)
+                        ? center
+                        : defocus_disk_sample(center, defocus_disk_u,
+                                              defocus_disk_v, rand_state);
+  // auto ray_origin = center;
+  auto ray_direction = pixel_sample - ray_origin;
+  return ray(ray_origin, ray_direction);
+}
+
 // 尝试使用 GPU端 的 ray_color
 // A __global__ function or function template cannot be a member function
 // 因此只能将 render<<<>>> 函数提出来
 __global__ void render(vec3* fb, hittable_list** world, int image_width,
-                       int image_height, vec3 origin, vec3 lower_left_corner,
-                       vec3 horizontal, vec3 vertical, int max_thread) {
+                       int image_height, int samples_per_pixel, vec3 center,
+                       vec3 pixel00_loc, float defocus_angle,
+                       vec3 pixel_delta_u, vec3 pixel_delta_v,
+                       vec3 defocus_disk_u, vec3 defocus_disk_v,
+                       curandState* d_rand_state, int n) {
   int id = getThreadId();
-  if (id >= max_thread) return;
+  if (id >= n) return;
+
+  curandState* rand_state = d_rand_state + id;
 
   // 计算 pixel 的 index
-  int pixel_index = id;
-  int u = pixel_index % image_width;
-  int v = pixel_index / image_width;
-  vec3 lo = (lower_left_corner + u * horizontal + v * vertical);
-  ray r(origin, lo - origin);
-  fb[pixel_index] = ray_color(r, world);
+  int pixel_id = id / samples_per_pixel;
+
+  int i = pixel_id % image_width;
+  int j = pixel_id / image_width;
+
+  ray r = get_ray(i, j, rand_state, center, pixel00_loc, defocus_angle,
+                  pixel_delta_u, pixel_delta_v, defocus_disk_u, defocus_disk_v);
+  color c = ray_color(r, world, rand_state);
+  // 原子操作, 浮点数的原子操作只支持 60架构及之后的版本
+  atomicAdd(&fb[pixel_id].e[0], c.e[0]);
+  atomicAdd(&fb[pixel_id].e[1], c.e[1]);
+  atomicAdd(&fb[pixel_id].e[2], c.e[2]);
 }
+
+/**
+ * @brief 在单位圆内随机采样
+ *
+ * @return point3
+ */
+// __device__ point3 defocus_disk_sample() const {
+//   auto p = random_in_unit_disk();
+//   return center + (p[0] * defocus_disk_u) + (p[1] * defocus_disk_v);
+// }
 // 相机类
 class camera {
  public:
@@ -58,56 +130,27 @@ class camera {
   double focus_dist = 10;  // 理想的焦距
   /* Public Camera Parameters Here */
 
-  // void render(const hittable_list& world) {
-  //   // 先初始化相机的各个参数
-  //   initialize();
-  // Render
-  // 渲染图像
-  // for (int j = 0; j < image_height; ++j) {
-  //   std::clog << "\rScanlines remaining: " << (image_height - j) << ' '
-  //             << std::flush;
-  //   for (int i = 0; i < image_width; ++i) {
-  //     color pixel_color;
-  //     for (int sample = 0; sample < samples_per_pixel; sample++) {
-  //       // 采样得到一条 视点->图像(i,j)像素的光线，在像素(i,j)中随机采样
-  //       auto r = get_ray(i, j);
-  //       // 在这里实现一个 计算光线 r 颜色的光线跟踪程序
-  //       pixel_color += ray_color(r, max_depth, world);
-
-  //     }
-  //   }
-  // }
-
-  // 输出渲染结果
-  //   write_color(fb, image_width, image_height, std::cout, samples_per_pixel);
-
-  //   std::clog << "\rDone.                 \n";
-  // }
-
   __host__ void renderEntrance(hittable_list** world) {
     initialize();
-    int tx = 8;
-    int ty = 8;
-    int nx = image_width;
-    int ny = image_height;
 
-    dim3 grid_size(nx / tx + 1, ny / ty + 1);
-    dim3 block_size(tx, ty);
+    int n = image_width * image_height * samples_per_pixel;
 
-    render<<<grid_size, block_size>>>(fb, world, nx, ny, center, pixel00_loc,
-                                      pixel_delta_u, pixel_delta_v,
-                                      image_width * image_height);
+    dim3 grid_size((n + 127) / 128);
+    dim3 block_size(128);
+
+    render<<<grid_size, block_size>>>(
+        fb, world, image_width, image_height, samples_per_pixel, center,
+        pixel00_loc, defocus_angle, pixel_delta_u, pixel_delta_v,
+        defocus_disk_u, defocus_disk_v, d_rand_state, n);
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
     // 输出渲染结果
-    samples_per_pixel = 1;
     write_color(fb, image_width, image_height, std::cout, samples_per_pixel);
   }
 
   ~camera() {
-    if (fb != nullptr) {
-      checkCudaErrors(cudaFree(fb));
-    }
+    if (fb != nullptr) checkCudaErrors(cudaFree(fb));
+    if (d_rand_state != nullptr) checkCudaErrors(cudaFree(d_rand_state));
   }
 
  private:
@@ -128,6 +171,7 @@ class camera {
   // 图像内存大小, framebuffer size
   size_t fb_size = 0;
   vec3* fb = nullptr;
+  curandState* d_rand_state = nullptr;
 
   /* Private Camera Variables Here */
   void initialize() {
@@ -194,6 +238,15 @@ class camera {
     int num_pixels = image_width * image_height;
     fb_size = num_pixels * sizeof(vec3);
     checkCudaErrors(cudaMallocManaged((void**)&fb, fb_size));
+    // CUDA 随机状态
+    int num_rand = num_pixels * samples_per_pixel;
+    checkCudaErrors(cudaMallocManaged((void**)&d_rand_state,
+                                      num_rand * sizeof(curandState)));
+
+    dim3 grid_size = (num_rand + 127) / 128;
+    dim3 block_size = 128;
+    initRandState<<<grid_size, block_size>>>(d_rand_state, num_rand);
+    checkCudaErrors(cudaDeviceSynchronize());
   }
 
   // 计算 光线 r 在场景 world 中的颜色
@@ -224,27 +277,6 @@ class camera {
   //   auto a = 0.5 * (unit_direction.y() + 1.0);
   //   return (1.0 - a) * color(1.0, 1.0, 1.0) + a * color(0.5, 0.7, 1.0);
   // }
-
-  // 采样 视点->像素 (i,j) 的一条光线
-  ray get_ray(int i, int j) const {
-    auto pixel_center = pixel00_loc + i * pixel_delta_u + j * pixel_delta_v;
-    auto pixel_sample = pixel_center + pixel_sample_square();
-
-    auto ray_origin = (defocus_angle <= 0) ? center : defocus_disk_sample();
-    auto ray_direction = pixel_sample - ray_origin;
-    return ray(ray_origin, ray_direction);
-  }
-  // 在一个 square 像素中采样得到一个点
-  vec3 pixel_sample_square() const {
-    auto px = -0.5 + random_double();
-    auto py = -0.5 + random_double();
-    return px * pixel_delta_u + py * pixel_delta_v;
-  }
-  // 在一个 disk 中采样一个点
-  point3 defocus_disk_sample() const {
-    auto p = random_in_unit_disk();
-    return center + (p[0] * defocus_disk_u) + (p[1] * defocus_disk_v);
-  }
 };
 
 #endif

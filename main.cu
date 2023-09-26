@@ -1,4 +1,5 @@
 // TODO:使用CUDA并行运算
+// TODO:修改world的构建方法，尽可能的与CPU版本的代码相同
 
 #include <float.h>
 
@@ -17,7 +18,7 @@
 __global__ void create_world(hittable** list, hittable_list** world) {
   int id = getThreadId();
   if (id > 0) return;
-  list[0] = new sphere(point3(0, 0, 0), 3, color(1, 1, 0));
+  list[0] = new sphere(point3(0, 0, 0), 3, color(0, 1, 0));
   list[1] = new sphere(point3(0, -1000, -100), 1000, color(0.5, 0.5, 0.5));
   *world = new hittable_list(list, 2);
 }

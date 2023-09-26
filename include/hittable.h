@@ -30,7 +30,7 @@ class hit_record {
 class hittable {
  public:
   // =default 指示编译器生成默认的构造函数
-  __host__ __device__ hittable() = default;
+  hittable() = default;
 
   __host__ __device__ virtual bool hit(const ray& r, interval ray_t,
                                        hit_record& rec) const = 0;

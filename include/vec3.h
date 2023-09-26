@@ -2,6 +2,7 @@
 // __device__
 #ifndef VEC3_H
 #define VEC3_H
+#include <cuda_runtime.h>
 #include <cmath>
 #include <iostream>
 
@@ -47,21 +48,24 @@ class vec3 {
   __host__ __device__ float length_squared() const {
     return e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
   }
-  // 随机采样 vec3
-  static vec3 random() {
-    return vec3(random_double(), random_double(), random_double());
-  }
-  // 随机采样 vec3(min, max)
-  static vec3 random(double min, double max) {
-    return vec3(random_double(min, max), random_double(min, max),
-                random_double(min, max));
-  }
+
   // 判断向量是否 接近0，用于误差判断
   __host__ __device__ bool near_zero() const {
     auto s = 1e-8;
-    return fabs(e[0] < s) && fabs(e[1] < s) && fabs(e[2] < s);
+    return abs(e[0] < s) && abs(e[1] < s) && abs(e[2] < s);
   }
 };
+
+// 随机采样 vec3
+__device__ vec3 random(curandState *state) {
+  return vec3(random_double(state), random_double(state), random_double(state));
+}
+// 随机采样 vec3(min, max)
+__device__ vec3 random(double min, double max, curandState *state) {
+  return vec3(random_double(min, max, state), random_double(min, max, state),
+              random_double(min, max, state));
+}
+
 // point3 is just an alias for vec3, but useful for geometric clarity in the
 // code.
 using point3 = vec3;
@@ -96,7 +100,7 @@ __host__ __device__ inline vec3 operator/(vec3 v, float t) {
   return (1 / t) * v;
 }
 
-__host__ __device__ inline double dot(const vec3 &u, const vec3 &v) {
+__host__ __device__ inline float dot(const vec3 &u, const vec3 &v) {
   return u.e[0] * v.e[0] + u.e[1] * v.e[1] + u.e[2] * v.e[2];
 }
 
@@ -108,21 +112,23 @@ __host__ __device__ inline vec3 cross(const vec3 &u, const vec3 &v) {
 
 // 正则化一个向量
 __host__ __device__ inline vec3 unit_vector(vec3 v) { return v / v.length(); }
+
 // 在 一个单位球内采样一个点
 // 此处使用的方法比较简单
-__host__ __device__ inline vec3 random_in_unit_sphere() {
+__device__ inline vec3 random_in_unit_sphere(curandState *state) {
   while (true) {
-    auto p = vec3::random(-1, 1);
+    auto p = random(-1, 1, state);
     if (p.length_squared() < 1) return p;
   }
 }
 // 正则化在单位球内采样的向量
-__host__ __device__ inline vec3 random_unit_vector() {
-  return unit_vector(random_in_unit_sphere());
+__device__ inline vec3 random_unit_vector(curandState *state) {
+  return unit_vector(random_in_unit_sphere(state));
 }
 // 在 normal 表示的半球内部采样得到一个单位向量
-__host__ __device__ inline vec3 random_on_hemisphere(const vec3 &normal) {
-  vec3 on_unit_sphere = random_unit_vector();
+__device__ inline vec3 random_on_hemisphere(const vec3 &normal,
+                                            curandState *state) {
+  vec3 on_unit_sphere = random_unit_vector(state);
   if (dot(normal, on_unit_sphere) >= 0.0) {
     return on_unit_sphere;
   } else {
@@ -131,9 +137,9 @@ __host__ __device__ inline vec3 random_on_hemisphere(const vec3 &normal) {
 }
 
 // 在圆内均匀采样，用于实现景深效果
-__host__ __device__ inline vec3 random_in_unit_disk() {
+__device__ inline vec3 random_in_unit_disk(curandState *state) {
   while (true) {
-    auto p = vec3(random_double(-1, 1), random_double(-1, 1), 0);
+    auto p = vec3(random_double(-1, 1, state), random_double(-1, 1, state), 0);
     if (p.length_squared() < 1) {
       return p;
     }
@@ -142,7 +148,7 @@ __host__ __device__ inline vec3 random_in_unit_disk() {
 
 // 计算反射光线的函数
 // 入射光 v， 法向 n
-__host__ __device__ inline vec3 reflect(const vec3 &v, const vec3 &n) {
+__device__ inline vec3 reflect(const vec3 &v, const vec3 &n) {
   return v - 2 * dot(v, n) * n;
 }
 
@@ -154,9 +160,10 @@ __host__ __device__ inline vec3 reflect(const vec3 &v, const vec3 &n) {
 // R'_=eta/eta'*(R+cos(theta)*n)
 // R'|=-sqrt(1-|R'_|^2)n
 // 其中 n 为折射面(指向入射光区域)的法向
-__host__ __device__ inline vec3 refract(const vec3 &v, const vec3 &n,
-                                        float etai_over_etat) {
-  float cos_theta = fmin(1.0, dot(-v, n));
+__device__ inline vec3 refract(const vec3 &v, const vec3 &n,
+                               float etai_over_etat) {
+  float cos_theta = min(1.0, dot(-v, n));
+
   vec3 r_out_perp = etai_over_etat * (v + cos_theta * n);
   vec3 r_out_parallel = -sqrt(fabs(1.0 - r_out_perp.length_squared())) * n;
   return r_out_perp + r_out_parallel;
