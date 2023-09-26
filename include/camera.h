@@ -10,24 +10,21 @@
 #include "rtweekend.h"
 
 // 根据光线r的y分量计算得到一个颜色
-__device__ vec3 ray_color(const ray& r, hittable_list** world,
+__device__ vec3 ray_color(const ray& r, hittable_list** world, ray& scattered,
                           curandState* rand_state) {
   hit_record rec;
 
-  if ((*world)->hit(r, interval(0, infinity), rec)) {
-    ray scattered;
+  if ((*world)->hit(r, interval(0.0001, infinity), rec)) {
     color attenuation;
     if (rec.mat->scatter(r, rec, attenuation, scattered, rand_state)) {
       return attenuation;
-    } else {
-      return color(0, 0, 0);
     }
-
-  } else {
-    vec3 unit_direction = unit_vector(r.direction());
-    float t = 0.5f * (unit_direction.y() + 1.0f);
-    return (1.0f - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
   }
+  vec3 unit_direction = unit_vector(r.direction());
+  float t = 0.5f * (unit_direction.y() + 1.0f);
+  scattered = ray(point3(0, 0, 0), vec3(0, 0, 0));
+  // return color(0, 0, 0);
+  return (1.0f - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
 }
 
 // 在一个 disk 中采样一个点
@@ -62,12 +59,12 @@ __device__ ray get_ray(int i, int j, curandState* rand_state,
   auto pixel_sample =
       pixel_center +
       pixel_sample_square(rand_state, pixel_delta_u, pixel_delta_v);
-
+  pixel_sample = pixel_center;
   auto ray_origin = (defocus_angle <= 0)
                         ? center
                         : defocus_disk_sample(center, defocus_disk_u,
                                               defocus_disk_v, rand_state);
-  // auto ray_origin = center;
+  ray_origin = center;
   auto ray_direction = pixel_sample - ray_origin;
   return ray(ray_origin, ray_direction);
 }
@@ -75,9 +72,9 @@ __device__ ray get_ray(int i, int j, curandState* rand_state,
 // 尝试使用 GPU端 的 ray_color
 // A __global__ function or function template cannot be a member function
 // 因此只能将 render<<<>>> 函数提出来
-__global__ void render(vec3* fb, hittable_list** world, int image_width,
-                       int image_height, int samples_per_pixel, vec3 center,
-                       vec3 pixel00_loc, float defocus_angle,
+__global__ void render(vec3* fb, hittable_list** world, int max_depth,
+                       int image_width, int image_height, int samples_per_pixel,
+                       vec3 center, vec3 pixel00_loc, float defocus_angle,
                        vec3 pixel_delta_u, vec3 pixel_delta_v,
                        vec3 defocus_disk_u, vec3 defocus_disk_v,
                        curandState* d_rand_state, int n) {
@@ -92,9 +89,29 @@ __global__ void render(vec3* fb, hittable_list** world, int image_width,
   int i = pixel_id % image_width;
   int j = pixel_id / image_width;
 
-  ray r = get_ray(i, j, rand_state, center, pixel00_loc, defocus_angle,
-                  pixel_delta_u, pixel_delta_v, defocus_disk_u, defocus_disk_v);
-  color c = ray_color(r, world, rand_state);
+  ray r;
+  ray scattered;
+  color c(1, 1, 1);
+
+  r = get_ray(i, j, rand_state, center, pixel00_loc, defocus_angle,
+              pixel_delta_u, pixel_delta_v, defocus_disk_u, defocus_disk_v);
+  // color c = ray_color(r, world, rand_state);
+  for (int depth = 0; depth < max_depth; depth++) {
+    color t = ray_color(r, world, scattered, rand_state);
+    c = c * t;
+    // if (depth == 1 && r.direction().x() < 0 && r.direction().y() < 0) {
+      // printf("%f %f %f\n", scattered.direction().x(),
+      // scattered.direction().y(),
+      //  scattered.direction().z());
+
+      // printf("%f %f %f\n", t.x(), t.y(), t.z());
+    // }
+    r = scattered;
+    if (r.direction().near_zero()) {
+      break;
+    }
+  }
+
   // 原子操作, 浮点数的原子操作只支持 60架构及之后的版本
   atomicAdd(&fb[pixel_id].e[0], c.e[0]);
   atomicAdd(&fb[pixel_id].e[1], c.e[1]);
@@ -132,15 +149,13 @@ class camera {
 
   __host__ void renderEntrance(hittable_list** world) {
     initialize();
-
     int n = image_width * image_height * samples_per_pixel;
-
     dim3 grid_size((n + 127) / 128);
     dim3 block_size(128);
 
     render<<<grid_size, block_size>>>(
-        fb, world, image_width, image_height, samples_per_pixel, center,
-        pixel00_loc, defocus_angle, pixel_delta_u, pixel_delta_v,
+        fb, world, max_depth, image_width, image_height, samples_per_pixel,
+        center, pixel00_loc, defocus_angle, pixel_delta_u, pixel_delta_v,
         defocus_disk_u, defocus_disk_v, d_rand_state, n);
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());

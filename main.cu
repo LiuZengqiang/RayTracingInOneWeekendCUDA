@@ -18,8 +18,10 @@
 __global__ void create_world(hittable** list, hittable_list** world) {
   int id = getThreadId();
   if (id > 0) return;
-  list[0] = new sphere(point3(0, 0, 0), 3, color(0, 1, 0));
-  list[1] = new sphere(point3(0, -1000, -100), 1000, color(0.5, 0.5, 0.5));
+  list[0] = new sphere(point3(0, 0, -1), 0.5, color(0, 1, 0));
+  // material* lamber = new lambertian(color(0.5, 0.5, 0.5));
+  // list[0] = new sphere(point3(0, 3, 0), 3, lamber);
+  list[1] = new sphere(point3(0, -100.5, -1), 100, color(1, 0, 0));
   *world = new hittable_list(list, 2);
 }
 
@@ -61,15 +63,15 @@ int main() {
   cam.aspect_ratio = 1.0;
   cam.image_width = 400;
   cam.samples_per_pixel = 100;
-  cam.max_depth = 5;
+  cam.max_depth = 2;
 
   cam.vfov = 90;
-  cam.lookfrom = point3(0, 0, 10);
-  cam.lookat = point3(0, 0, 0);
+  cam.lookfrom = point3(0, 0, 0);
+  cam.lookat = point3(0, 0, -1);
   cam.vup = vec3(0, 1, 0);
 
   cam.defocus_angle = 0.6;
-  cam.focus_dist = 10.0;
+  cam.focus_dist = 1.0;
   cam.renderEntrance(d_world);
   // cam.render(world);
   checkCudaErrors(cudaDeviceSynchronize());

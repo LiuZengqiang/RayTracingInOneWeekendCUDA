@@ -31,8 +31,11 @@ class lambertian : public material {
     if (scatter_direction.near_zero()) {
       scatter_direction = rec.normal;
     }
-
     scattered = ray(rec.p, scatter_direction);
+    // scattered = ray(rec.p, rec.normal);
+    // vec3 v = unit_vector(r_in.direction());
+    // vec3 n = unit_vector(rec.normal);
+    // scattered = ray(rec.p, reflect(v, n));
     attenuation = albedo;
     return true;
   }

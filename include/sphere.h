@@ -7,6 +7,11 @@
 #include "vec3.h"
 class sphere : public hittable {
  public:
+  ~sphere() {
+    if (mat != nullptr) {
+      delete mat;
+    }
+  }
   // 构造函数包含 球心、半径
   __host__ __device__ sphere(point3 _center, double _radius,
                              material* _material)

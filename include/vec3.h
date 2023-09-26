@@ -52,7 +52,7 @@ class vec3 {
   // 判断向量是否 接近0，用于误差判断
   __host__ __device__ bool near_zero() const {
     auto s = 1e-8;
-    return abs(e[0] < s) && abs(e[1] < s) && abs(e[2] < s);
+    return abs(e[0]) < s && abs(e[1]) < s && abs(e[2]) < s;
   }
 };
 
