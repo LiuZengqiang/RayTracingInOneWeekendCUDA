@@ -14,7 +14,7 @@ __device__ vec3 ray_color(const ray& r, hittable_list** world, ray& scattered,
                           curandState* rand_state) {
   hit_record rec;
 
-  if ((*world)->hit(r, interval(0.0001, infinity), rec)) {
+  if ((*world)->hit(r, interval(0.001f, infinity), rec)) {
     color attenuation;
     if (rec.mat->scatter(r, rec, attenuation, scattered, rand_state)) {
       return attenuation;
@@ -23,7 +23,7 @@ __device__ vec3 ray_color(const ray& r, hittable_list** world, ray& scattered,
   vec3 unit_direction = unit_vector(r.direction());
   float t = 0.5f * (unit_direction.y() + 1.0f);
   scattered = ray(point3(0, 0, 0), vec3(0, 0, 0));
-  // return color(0, 0, 0);
+  // return color(0,0,0);
   return (1.0f - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
 }
 
@@ -31,8 +31,8 @@ __device__ vec3 ray_color(const ray& r, hittable_list** world, ray& scattered,
 __device__ point3 defocus_disk_sample(const vec3& center,
                                       const vec3& defocus_disk_u,
                                       const vec3& defocus_disk_v,
-                                      curandState* state) {
-  auto p = random_in_unit_disk(state);
+                                      curandState* rand_state) {
+  auto p = random_in_unit_disk(rand_state);
   return center + (p[0] * defocus_disk_u) + (p[1] * defocus_disk_v);
 }
 
@@ -59,12 +59,10 @@ __device__ ray get_ray(int i, int j, curandState* rand_state,
   auto pixel_sample =
       pixel_center +
       pixel_sample_square(rand_state, pixel_delta_u, pixel_delta_v);
-  pixel_sample = pixel_center;
   auto ray_origin = (defocus_angle <= 0)
                         ? center
                         : defocus_disk_sample(center, defocus_disk_u,
                                               defocus_disk_v, rand_state);
-  ray_origin = center;
   auto ray_direction = pixel_sample - ray_origin;
   return ray(ray_origin, ray_direction);
 }
@@ -95,17 +93,8 @@ __global__ void render(vec3* fb, hittable_list** world, int max_depth,
 
   r = get_ray(i, j, rand_state, center, pixel00_loc, defocus_angle,
               pixel_delta_u, pixel_delta_v, defocus_disk_u, defocus_disk_v);
-  // color c = ray_color(r, world, rand_state);
   for (int depth = 0; depth < max_depth; depth++) {
-    color t = ray_color(r, world, scattered, rand_state);
-    c = c * t;
-    // if (depth == 1 && r.direction().x() < 0 && r.direction().y() < 0) {
-      // printf("%f %f %f\n", scattered.direction().x(),
-      // scattered.direction().y(),
-      //  scattered.direction().z());
-
-      // printf("%f %f %f\n", t.x(), t.y(), t.z());
-    // }
+    c = c * ray_color(r, world, scattered, rand_state);
     r = scattered;
     if (r.direction().near_zero()) {
       break;

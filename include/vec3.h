@@ -57,13 +57,13 @@ class vec3 {
 };
 
 // 随机采样 vec3
-__device__ vec3 random(curandState *state) {
-  return vec3(random_double(state), random_double(state), random_double(state));
+__device__ vec3 random(curandState *rand_state) {
+  return vec3(random_double(rand_state), random_double(rand_state), random_double(rand_state));
 }
 // 随机采样 vec3(min, max)
-__device__ vec3 random(double min, double max, curandState *state) {
-  return vec3(random_double(min, max, state), random_double(min, max, state),
-              random_double(min, max, state));
+__device__ vec3 random(double min, double max, curandState *rand_state) {
+  return vec3(random_double(min, max, rand_state), random_double(min, max, rand_state),
+              random_double(min, max, rand_state));
 }
 
 // point3 is just an alias for vec3, but useful for geometric clarity in the
@@ -115,20 +115,20 @@ __host__ __device__ inline vec3 unit_vector(vec3 v) { return v / v.length(); }
 
 // 在 一个单位球内采样一个点
 // 此处使用的方法比较简单
-__device__ inline vec3 random_in_unit_sphere(curandState *state) {
+__device__ inline vec3 random_in_unit_sphere(curandState *rand_state) {
   while (true) {
-    auto p = random(-1, 1, state);
+    auto p = random(-1, 1, rand_state);
     if (p.length_squared() < 1) return p;
   }
 }
 // 正则化在单位球内采样的向量
-__device__ inline vec3 random_unit_vector(curandState *state) {
-  return unit_vector(random_in_unit_sphere(state));
+__device__ inline vec3 random_unit_vector(curandState *rand_state) {
+  return unit_vector(random_in_unit_sphere(rand_state));
 }
 // 在 normal 表示的半球内部采样得到一个单位向量
 __device__ inline vec3 random_on_hemisphere(const vec3 &normal,
-                                            curandState *state) {
-  vec3 on_unit_sphere = random_unit_vector(state);
+                                            curandState *rand_state) {
+  vec3 on_unit_sphere = random_unit_vector(rand_state);
   if (dot(normal, on_unit_sphere) >= 0.0) {
     return on_unit_sphere;
   } else {
@@ -137,9 +137,9 @@ __device__ inline vec3 random_on_hemisphere(const vec3 &normal,
 }
 
 // 在圆内均匀采样，用于实现景深效果
-__device__ inline vec3 random_in_unit_disk(curandState *state) {
+__device__ inline vec3 random_in_unit_disk(curandState *rand_state) {
   while (true) {
-    auto p = vec3(random_double(-1, 1, state), random_double(-1, 1, state), 0);
+    auto p = vec3(random_double(-1, 1, rand_state), random_double(-1, 1, rand_state), 0);
     if (p.length_squared() < 1) {
       return p;
     }

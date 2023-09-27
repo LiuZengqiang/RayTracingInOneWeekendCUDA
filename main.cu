@@ -18,16 +18,31 @@
 __global__ void create_world(hittable** list, hittable_list** world) {
   int id = getThreadId();
   if (id > 0) return;
-  list[0] = new sphere(point3(0, 0, -1), 0.5, color(0, 1, 0));
+  // list[0] = new sphere(point3(0, 0, -1), 0.5, color(0, 1, 0));
   // material* lamber = new lambertian(color(0.5, 0.5, 0.5));
-  // list[0] = new sphere(point3(0, 3, 0), 3, lamber);
-  list[1] = new sphere(point3(0, -100.5, -1), 100, color(1, 0, 0));
-  *world = new hittable_list(list, 2);
+  // material* metal_material = new metal(color(0.8, 0.8, 0.8), 0.3);
+  // material* metal_dielectric = new dielectric(1.2);
+
+  lambertian* material_ground = new lambertian(color(0.8, 0.8, 0.0));
+  // lambertian* material_center = new lambertian(color(0.1, 0.2, 0.5));
+  lambertian* material_center = new lambertian(color(0.7, 0.3, 0.3));
+  // dielectric* material_left = new dielectric(1.02);
+  metal* material_left = new metal(color(0.8, 0.8, 0.8), 0.3);
+  metal* material_right = new metal(color(0.8, 0.6, 0.2), 1.0);
+
+  list[0] = new sphere(point3(0, -100.5, -1), 100, material_ground);
+  list[1] = new sphere(point3(0.0, 0.0, -1.0), 0.5, material_center);
+  list[2] = new sphere(point3(-1.0, 0.0, -1.0), 0.5, material_left);
+  list[3] = new sphere(point3(1.0, 0.0, -1.0), 0.5, material_right);
+  
+  *world = new hittable_list(list, 4);
 }
 
 __global__ void free_world(hittable** list, hittable_list** world) {
   delete (list[0]);
   delete (list[1]);
+  delete (list[2]);
+  delete (list[3]);
   delete *world;
 }
 int main() {
@@ -52,7 +67,7 @@ int main() {
   // world.device();
   hittable** d_list = nullptr;
 
-  cudaMalloc((void**)&d_list, 2 * sizeof(hittable*));
+  cudaMalloc((void**)&d_list, 4 * sizeof(hittable*));
 
   hittable_list** d_world = nullptr;
   cudaMalloc((void**)&d_world, 1 * sizeof(hittable_list*));
@@ -60,10 +75,10 @@ int main() {
   create_world<<<1, 1>>>(d_list, d_world);
   camera cam;
   cam.aspect_ratio = 16.0 / 9.0;
-  cam.aspect_ratio = 1.0;
+  // cam.aspect_ratio = 1.0;
   cam.image_width = 400;
   cam.samples_per_pixel = 100;
-  cam.max_depth = 2;
+  cam.max_depth = 10;
 
   cam.vfov = 90;
   cam.lookfrom = point3(0, 0, 0);
