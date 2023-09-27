@@ -18,6 +18,9 @@ __device__ vec3 ray_color(const ray& r, hittable_list** world, ray& scattered,
     color attenuation;
     if (rec.mat->scatter(r, rec, attenuation, scattered, rand_state)) {
       return attenuation;
+    } else {
+      scattered = ray(point3(0, 0, 0), vec3(0, 0, 0));
+      return color(0, 0, 0);
     }
   }
   vec3 unit_direction = unit_vector(r.direction());
@@ -98,6 +101,9 @@ __global__ void render(vec3* fb, hittable_list** world, int max_depth,
     r = scattered;
     if (r.direction().near_zero()) {
       break;
+    }
+    if (depth == max_depth - 1) {
+      c = color(0, 0, 0);
     }
   }
 
