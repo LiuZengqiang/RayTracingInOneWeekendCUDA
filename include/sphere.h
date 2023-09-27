@@ -7,17 +7,17 @@
 #include "vec3.h"
 class sphere : public hittable {
  public:
+  
   ~sphere() {
     if (mat != nullptr) {
       delete mat;
     }
   }
   // 构造函数包含 球心、半径
-  __host__ __device__ sphere(point3 _center, double _radius,
-                             material* _material)
+  __device__ sphere(point3 _center, double _radius, material* _material)
       : center(_center), radius(_radius), mat(_material) {}
 
-  __host__ __device__ sphere(point3 _center, double _radius, color c)
+  __device__ sphere(point3 _center, double _radius, color c)
       : center(_center), radius(_radius) {
     mat = new lambertian(c);
   }
@@ -26,8 +26,8 @@ class sphere : public hittable {
   // 返回值bool表示是否有合法的相交点
   // 引用参数rec表示 如果有合法相交，合法的相交点为 rec
 
-  __host__ __device__ bool hit(const ray& r, interval ray_t,
-                               hit_record& rec) const override {
+  __device__ bool hit(const ray& r, interval ray_t,
+                      hit_record& rec) const override {
     // 光线与球的相交计算公式，求解交点t
     vec3 oc = r.origin() - center;
     float a = r.direction().length_squared();
@@ -68,6 +68,8 @@ class sphere : public hittable {
 
     return true;
   }
+
+  __device__ virtual size_t self_size() const override { return sizeof(*this); }
 
  private:
   point3 center;

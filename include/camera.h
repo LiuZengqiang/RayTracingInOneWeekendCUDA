@@ -73,12 +73,13 @@ __device__ ray get_ray(int i, int j, curandState* rand_state,
 // 尝试使用 GPU端 的 ray_color
 // A __global__ function or function template cannot be a member function
 // 因此只能将 render<<<>>> 函数提出来
-__global__ void render(vec3* fb, hittable_list** world, int max_depth,
-                       int image_width, int image_height, int samples_per_pixel,
-                       vec3 center, vec3 pixel00_loc, float defocus_angle,
-                       vec3 pixel_delta_u, vec3 pixel_delta_v,
-                       vec3 defocus_disk_u, vec3 defocus_disk_v,
-                       curandState* d_rand_state, int n) {
+__global__ void render_kernal(vec3* fb, hittable_list** world, int max_depth,
+                              int image_width, int image_height,
+                              int samples_per_pixel, vec3 center,
+                              vec3 pixel00_loc, float defocus_angle,
+                              vec3 pixel_delta_u, vec3 pixel_delta_v,
+                              vec3 defocus_disk_u, vec3 defocus_disk_v,
+                              curandState* d_rand_state, int n) {
   int id = getThreadId();
   if (id >= n) return;
 
@@ -125,12 +126,12 @@ __global__ void render(vec3* fb, hittable_list** world, int max_depth,
 // 相机类
 class camera {
  public:
-  double aspect_ratio = 16.0 / 9.0;  // 图片的横纵比例
-  int image_width = 400;             // 图片的像素宽度
-  int samples_per_pixel = 100;       // 每个像素的采样光线数
-  int max_depth = 10;                // 光线在最大深度(反射次数)
+  float aspect_ratio = 16.0 / 9.0;  // 图片的横纵比例
+  int image_width = 400;            // 图片的像素宽度
+  int samples_per_pixel = 100;      // 每个像素的采样光线数
+  int max_depth = 10;               // 光线在最大深度(反射次数)
 
-  double vfov = 90;  // Vertical view angle, field of view 视场角
+  float vfov = 90;  // Vertical view angle, field of view 视场角
 
   point3 lookfrom = point3(0, 0, -1);  // 相机(眼睛的所在位置)
   point3 lookat = point3(0, 0, 0);     // 相机盯着的点
@@ -138,17 +139,17 @@ class camera {
       vec3(0, 1, 0);  // 相机(视角)的"上"向量，没必要完全跟 lookfrom-lookat
                       // 向量正交，因为之后会使用 向量的叉乘操作使得两个向量正交
 
-  double defocus_angle = 0;  // 景深效果中，一个像素中发出的光线角度
-  double focus_dist = 10;  // 理想的焦距
+  float defocus_angle = 0;  // 景深效果中，一个像素中发出的光线角度
+  float focus_dist = 10;  // 理想的焦距
   /* Public Camera Parameters Here */
 
-  __host__ void renderEntrance(hittable_list** world) {
+  __host__ void render(hittable_list** world) {
     initialize();
     int n = image_width * image_height * samples_per_pixel;
     dim3 grid_size((n + 127) / 128);
     dim3 block_size(128);
 
-    render<<<grid_size, block_size>>>(
+    render_kernal<<<grid_size, block_size>>>(
         fb, world, max_depth, image_width, image_height, samples_per_pixel,
         center, pixel00_loc, defocus_angle, pixel_delta_u, pixel_delta_v,
         defocus_disk_u, defocus_disk_v, d_rand_state, n);
@@ -207,7 +208,7 @@ class camera {
     // 不一定真的等于 aspect_ratio
     auto viewport_height = 2 * h * focus_dist;  // 视窗 世界坐标系下的值
     auto viewport_width =
-        viewport_height * (static_cast<double>(image_width) / image_height);
+        viewport_height * (static_cast<float>(image_width) / image_height);
 
     // 计算相机的局部坐标 u,v,w
     w = unit_vector(lookfrom - lookat);
@@ -239,7 +240,7 @@ class camera {
 
     // 散焦半径
     auto defocus_radius =
-        focus_dist * tan(degrees_to_radians(defocus_angle / 2.0));
+        focus_dist * tan(degrees_to_radians(defocus_angle / 2.0f));
     // 单位散焦半径 u 方向
     defocus_disk_u = defocus_radius * u;
     // 单位散焦半径 v 方向
@@ -258,35 +259,6 @@ class camera {
     initRandState<<<grid_size, block_size>>>(d_rand_state, num_rand);
     checkCudaErrors(cudaDeviceSynchronize());
   }
-
-  // 计算 光线 r 在场景 world 中的颜色
-  // color ray_color(const ray& r, int depth, const hittable_list& world) {
-  //   if (depth <= 0) {
-  //     return color(0, 0, 0);
-  //   }
-  //   hit_record rec;
-  //   // 如果集中物体，就反射物体的颜色*0.5
-  //   // 忽略[0,0.001) 范围内的交点，以避免浮点运算的误差
-  //   if (world.hit(r, interval(0.001, infinity), rec)) {
-  //     // 计算反射结果
-  //     // 反射光线
-  //     ray scattered;
-  //     // 光线的散射
-  //     color attenuation;
-  //     // 入射光, 交点, 衰减, 散射
-  //     if (rec.mat->scatter(r, rec, attenuation, scattered)) {
-  //       return attenuation * ray_color(scattered, depth - 1, world);
-  //     } else {
-  //       // 有一定可能 反射光 与 交点法向 反向，此时
-  //       // rec.mat->scatter()函数返回false
-  //       return color(0, 0, 0);
-  //     }
-  //   }
-  //   // 如果没有击中物体，就假设击中天空，天空的颜色是一个无意义的随机值
-  //   vec3 unit_direction = unit_vector(r.direction());
-  //   auto a = 0.5 * (unit_direction.y() + 1.0);
-  //   return (1.0 - a) * color(1.0, 1.0, 1.0) + a * color(0.5, 0.7, 1.0);
-  // }
 };
 
 #endif
