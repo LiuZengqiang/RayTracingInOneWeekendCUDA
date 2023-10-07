@@ -88,8 +88,8 @@ class dielectric : public material {
     if (cannot_refraction ||
         reflectance(cos_theta, refraction_ratio) > random_double(rand_state)) {
       // 如果入射角度太大 或者
-      // 根据反射 / 折射比率计算得到该光线为反射->只有反射 direction =
-      reflect(unit_direction, rec.normal);
+      // 根据反射 / 折射比率计算得到该光线为反射->只有反射
+      direction = reflect(unit_direction, rec.normal);
     } else {
       // 存在折射
       // 计算折射光线
