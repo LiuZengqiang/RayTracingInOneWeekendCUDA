@@ -15,16 +15,18 @@ mkdir build
 ./run.sh
 ```
 ### 示例结果：
-1. 场景1
-2. 场景2
-3. 场景3
+* 场景1 (800*450, spp=100, max_depth=50)   
+![示例结果](./output/image.png)  
 ### 耗时对比：
-| 场景   | 光线数   | 单像素采样数|光线最大深度|CPU|GPU|  
-| ------ | ------ |--|--|--|--|
-| 场景1 | 100 |1|1|1|1|
-| 场景2 | 100 |1|1|1|1|
-| 场景3 | 100 |1|1|1|1|
-* 电脑配置：  
+| 场景   | 分辨率|spp|最大深度|CPU耗时(s)|GPU耗时(s)|  
+| -- | --|-- |--|--|--|
+| 场景1 | 800*450|100 |50|2019.81|26.82|
+
+电脑配置：  
+* CPU: Intel(R) Core(TM) i5-10400F CPU @ 2.90GHz  
+* GPU: NVIDIA Corporation GP104 [GeForce GTX 1080] (rev a1)  
+* CUDA: 11.4  
+* nvidia Driver: 470.57.02   
 
 ### CUDA代码针对C++代码的修改：
 在实现时，本仓库CUDA代码尽可能和[RayTracingInOneWeekend](https://github.com/LiuZengqiang/RayTracingInOneWeekend)中的代码相似，其中不得不该的部分主要分为以下几点：

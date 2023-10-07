@@ -1,5 +1,5 @@
 #include <float.h>
-
+#include <time.h>
 #include <iostream>
 #include <curand_kernel.h>
 #include "camera.h"
@@ -71,6 +71,9 @@ __global__ void free_world(hittable_list** world) {
   delete *world;
 }
 int main() {
+  clock_t start, end;  // 定义clock_t变量
+  start = clock();     // 开始时间
+
   hittable_list** d_world = nullptr;
 
   curandState* d_rand_state;
@@ -83,7 +86,7 @@ int main() {
 
   /* 设置相机和输出图像的属性 */
   camera cam;
-  cam.aspect_ratio = 16.0 / 9.0;  // 图像的长宽比
+  cam.aspect_ratio = 16.0 / 9.0;  // 图像的横纵比
   cam.image_width = 800;          // 图像的宽(像素数)
   cam.samples_per_pixel = 100;    // 每个像素的采样光线数
   cam.max_depth = 50;             // 光线的最大深度
@@ -104,5 +107,8 @@ int main() {
 
   cudaFree(d_world);
   cudaFree(d_rand_state);
+  end = clock();  // 结束时间
+  std::clog << "time = " << double(end - start) / CLOCKS_PER_SEC << "s"
+            << std::endl;  // 输出时间（单位：ｓ）
   return 0;
 }
